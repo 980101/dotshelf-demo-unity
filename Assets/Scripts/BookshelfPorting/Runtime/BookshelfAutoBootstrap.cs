@@ -40,7 +40,11 @@ namespace BookshelfPorting.Runtime
                 overviewPosition,
                 Quaternion.LookRotation((overviewTarget - overviewPosition).normalized, Vector3.up));
             var frontalAnchor = CreateAnchor(camerasRoot, "FrontalAnchor", new Vector3(0f, 0.95f, -0.95f), Quaternion.LookRotation(new Vector3(0f, -0.1f, 2.15f).normalized, Vector3.up));
-            var whiteboardAnchor = CreateAnchor(camerasRoot, "WhiteboardAnchor", new Vector3(-1.45f, 1.05f, 0.15f), Quaternion.LookRotation(Vector3.left, Vector3.up));
+            var whiteboardAnchor = CreateAnchor(
+                camerasRoot,
+                "WhiteboardAnchor",
+                new Vector3(-0.92f, 1.18f, 0.12f),
+                Quaternion.LookRotation(Vector3.left, Vector3.up));
             var notebookPosition = new Vector3(-0.12f, 0.72f, -1.28f);
             var notebookTarget = new Vector3(-0.80f, 0.56f, -0.94f);
             var notebookAnchor = CreateAnchor(
@@ -68,6 +72,7 @@ namespace BookshelfPorting.Runtime
 
             environment.Apply();
             generator.Generate();
+            AlignNotebookAnchor(notebookAnchor);
             cameraController.MoveToMode(CameraMode.Overview);
         }
 
@@ -78,6 +83,35 @@ namespace BookshelfPorting.Runtime
             anchor.position = position;
             anchor.rotation = rotation;
             return anchor;
+        }
+
+        private static void AlignNotebookAnchor(Transform notebookAnchor)
+        {
+            if (notebookAnchor == null)
+            {
+                return;
+            }
+
+            var notebookScreenController = Object.FindFirstObjectByType<NotebookScreenController>();
+            var screen = notebookScreenController != null
+                ? notebookScreenController.transform.Find("Screen")
+                : null;
+            if (screen == null)
+            {
+                return;
+            }
+
+            var screenCenterTransform = screen.Find("ScreenCenter");
+            var cameraFocusPoint = screen.Find("CameraFocusPoint");
+            var screenCenter = screenCenterTransform != null
+                ? screenCenterTransform.position
+                : screen.TransformPoint(new Vector3(0f, 0.068f, 0.014f));
+            var anchorPosition = cameraFocusPoint != null
+                ? cameraFocusPoint.position
+                : screen.TransformPoint(new Vector3(0f, -0.58f, 0.024f));
+
+            notebookAnchor.position = anchorPosition;
+            notebookAnchor.rotation = Quaternion.LookRotation((screenCenter - anchorPosition).normalized, Vector3.up);
         }
     }
 }

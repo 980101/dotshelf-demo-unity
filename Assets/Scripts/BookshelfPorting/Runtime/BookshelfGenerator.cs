@@ -5,6 +5,7 @@ namespace BookshelfPorting.Runtime
 {
     public class BookshelfGenerator : MonoBehaviour
     {
+        private const string HamhamAssetPath = "Assets/Meshy_AI_Hamham_0416082404_texture.glb";
         private const string QABooksBaseTexturePath = "Assets/QA_Books/Textures/BooksA_bc.tga";
         private const string QABooksNormalTexturePath = "Assets/QA_Books/Textures/BooksA_n.tga";
         private const string QABooksMetallicTexturePath = "Assets/QA_Books/Textures/BooksA_m_ao_g.tga";
@@ -18,6 +19,7 @@ namespace BookshelfPorting.Runtime
         [SerializeField] private Transform roomRoot = null;
         [SerializeField] private Transform bookshelfRoot = null;
         [SerializeField] private Transform booksRoot = null;
+        [SerializeField] private GameObject hamhamModelAsset = null;
         [SerializeField] private Texture2D qaBooksBaseMap = null;
         [SerializeField] private Texture2D qaBooksNormalMap = null;
         [SerializeField] private Texture2D qaBooksMaskMap = null;
@@ -170,6 +172,7 @@ namespace BookshelfPorting.Runtime
             state.ResetSections(sections);
             SpawnBooks(sections);
             state.LayoutAll(state, false);
+            BuildHamhamDisplay();
         }
 
         private void SpawnBooks(List<ShelfSection> sections)
@@ -431,6 +434,65 @@ namespace BookshelfPorting.Runtime
             generatedGeometry.Add(box);
         }
 
+        private void BuildHamhamDisplay()
+        {
+            var hamhamAsset = ResolveHamhamAsset();
+            if (hamhamAsset == null)
+            {
+                return;
+            }
+
+            var hamhamRoot = new GameObject("HamhamDisplay");
+            hamhamRoot.transform.SetParent(transform, false);
+            hamhamRoot.transform.localPosition = bookshelfRoot.localPosition + new Vector3(width * 0.5f + 0.42f, 0f, -0.05f);
+            hamhamRoot.transform.localRotation = Quaternion.Euler(0f, 152f, 0f);
+            hamhamRoot.transform.localScale = Vector3.one * 0.42f;
+            generatedGeometry.Add(hamhamRoot);
+
+            var instance = Instantiate(hamhamAsset, hamhamRoot.transform);
+            instance.name = hamhamAsset.name;
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+
+            AlignModelToFloor(hamhamRoot.transform, instance.transform);
+        }
+
+        private GameObject ResolveHamhamAsset()
+        {
+            if (hamhamModelAsset != null)
+            {
+                return hamhamModelAsset;
+            }
+
+#if UNITY_EDITOR
+            hamhamModelAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(HamhamAssetPath);
+#endif
+
+            return hamhamModelAsset;
+        }
+
+        private static void AlignModelToFloor(Transform root, Transform modelRoot)
+        {
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            if (renderers == null || renderers.Length == 0)
+            {
+                return;
+            }
+
+            var bounds = renderers[0].bounds;
+            for (var i = 1; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
+                {
+                    bounds.Encapsulate(renderers[i].bounds);
+                }
+            }
+
+            var minLocal = root.InverseTransformPoint(bounds.min);
+            modelRoot.localPosition -= new Vector3(0f, minLocal.y, 0f);
+        }
+
         private void BuildGuestbookBoard()
         {
             var guestbook = new GameObject("GuestbookBoard");
@@ -458,10 +520,14 @@ namespace BookshelfPorting.Runtime
 
         private void BuildNotebookStation()
         {
+            var guestbook = roomRoot != null ? roomRoot.Find("GuestbookBoard") : null;
+            var notebookParent = guestbook != null ? guestbook : roomRoot;
             var notebookStation = new GameObject("NotebookStation");
-            notebookStation.transform.SetParent(roomRoot, false);
-            notebookStation.transform.localPosition = new Vector3(-0.82f, 0f, -0.92f);
-            notebookStation.transform.localRotation = Quaternion.Euler(0f, 28f, 0f);
+            notebookStation.transform.SetParent(notebookParent, false);
+            notebookStation.transform.localPosition = guestbook != null
+                ? new Vector3(0.72f, -1.18f, 0f)
+                : new Vector3(-1.28f, 0f, 0.12f);
+            notebookStation.transform.localRotation = Quaternion.identity;
             generatedGeometry.Add(notebookStation);
 
             var wood = materialFactory.GetBookshelfWoodMaterial();
@@ -472,16 +538,28 @@ namespace BookshelfPorting.Runtime
             var keyLetterTone = materialFactory.CreateBookMaterial(new Color(0.12f, 0.125f, 0.13f));
             var trackpadTone = materialFactory.CreateBookMaterial(new Color(0.60f, 0.61f, 0.59f));
 
-            CreateBox("NotebookDesk", notebookStation.transform, new Vector3(0f, 0.38f, 0f), new Vector3(0.72f, 0.06f, 0.46f), wood);
-            CreateBox("DeskLegA", notebookStation.transform, new Vector3(-0.29f, 0.19f, -0.16f), new Vector3(0.06f, 0.38f, 0.06f), wood);
-            CreateBox("DeskLegB", notebookStation.transform, new Vector3(0.29f, 0.19f, -0.16f), new Vector3(0.06f, 0.38f, 0.06f), wood);
-            CreateBox("DeskLegC", notebookStation.transform, new Vector3(-0.29f, 0.19f, 0.16f), new Vector3(0.06f, 0.38f, 0.06f), wood);
-            CreateBox("DeskLegD", notebookStation.transform, new Vector3(0.29f, 0.19f, 0.16f), new Vector3(0.06f, 0.38f, 0.06f), wood);
+            const float deskHeight = 0.38f;
+            const float deskThickness = 0.06f;
+            const float deskDepth = 0.54f;
+            const float deskWidth = 0.86f;
+            const float legThickness = 0.06f;
+
+            var desk = new GameObject("Desk");
+            desk.transform.SetParent(notebookStation.transform, false);
+            desk.transform.localPosition = Vector3.zero;
+            desk.transform.localRotation = Quaternion.identity;
+            generatedGeometry.Add(desk);
+
+            CreateBox("Desktop", desk.transform, new Vector3(0f, deskHeight, 0f), new Vector3(deskDepth, deskThickness, deskWidth), wood);
+            CreateBox("DeskLegA", desk.transform, new Vector3(-(deskDepth * 0.5f - 0.11f), deskHeight * 0.5f, -(deskWidth * 0.5f - 0.10f)), new Vector3(legThickness, deskHeight, legThickness), wood);
+            CreateBox("DeskLegB", desk.transform, new Vector3(deskDepth * 0.5f - 0.11f, deskHeight * 0.5f, -(deskWidth * 0.5f - 0.10f)), new Vector3(legThickness, deskHeight, legThickness), wood);
+            CreateBox("DeskLegC", desk.transform, new Vector3(-(deskDepth * 0.5f - 0.11f), deskHeight * 0.5f, deskWidth * 0.5f - 0.10f), new Vector3(legThickness, deskHeight, legThickness), wood);
+            CreateBox("DeskLegD", desk.transform, new Vector3(deskDepth * 0.5f - 0.11f, deskHeight * 0.5f, deskWidth * 0.5f - 0.10f), new Vector3(legThickness, deskHeight, legThickness), wood);
 
             var notebook = new GameObject("Notebook");
-            notebook.transform.SetParent(notebookStation.transform, false);
-            notebook.transform.localPosition = new Vector3(0.02f, 0.43f, 0.02f);
-            notebook.transform.localRotation = Quaternion.Euler(0f, -10f, 0f);
+            notebook.transform.SetParent(desk.transform, false);
+            notebook.transform.localPosition = new Vector3(0.10f, deskHeight + deskThickness * 0.5f + 0.009f, 0f);
+            notebook.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
             generatedGeometry.Add(notebook);
 
             CreateBox("UnibodyBase", notebook.transform, new Vector3(0f, 0f, 0f), new Vector3(0.50f, 0.018f, 0.32f), aluminum);
@@ -496,16 +574,16 @@ namespace BookshelfPorting.Runtime
             var screen = new GameObject("Screen");
             screen.transform.SetParent(notebook.transform, false);
             screen.transform.localPosition = new Vector3(0f, 0.114f, -0.154f);
-            screen.transform.localRotation = Quaternion.Euler(-101f, 0f, 0f);
+            screen.transform.localRotation = Quaternion.Euler(-99.5f, 0f, 0f);
             generatedGeometry.Add(screen);
 
             CreateBox("ScreenLid", screen.transform, Vector3.zero, new Vector3(0.50f, 0.018f, 0.31f), aluminum);
-            CreateBox("LowerBezelLip", screen.transform, new Vector3(0f, -0.0095f, 0.143f), new Vector3(0.474f, 0.009f, 0.016f), aluminum);
-            CreateBox("BlackBezel", screen.transform, new Vector3(0f, -0.0105f, 0f), new Vector3(0.470f, 0.008f, 0.266f), darkGlass);
-            CreateBox("DisplayPanel", screen.transform, new Vector3(0f, -0.0135f, 0.002f), new Vector3(0.436f, 0.006f, 0.232f), screenGlow);
+            CreateBox("LowerBezelLip", screen.transform, new Vector3(0f, -0.0095f, 0.143f), new Vector3(0.478f, 0.009f, 0.015f), aluminum);
+            CreateBox("BlackBezel", screen.transform, new Vector3(0f, -0.0105f, 0f), new Vector3(0.474f, 0.008f, 0.270f), darkGlass);
+            CreateBox("DisplayPanel", screen.transform, new Vector3(0f, -0.0135f, 0.002f), new Vector3(0.448f, 0.006f, 0.244f), screenGlow);
             CreateBox("CameraDot", screen.transform, new Vector3(0f, -0.0185f, -0.127f), new Vector3(0.012f, 0.004f, 0.012f), materialFactory.CreateBookMaterial(new Color(0.02f, 0.025f, 0.03f)));
-            CreateReferenceTransform(screen.transform, "ScreenCenter", new Vector3(0f, 0.062f, 0.014f));
-            CreateReferenceTransform(screen.transform, "CameraFocusPoint", new Vector3(0f, -0.56f, 0.034f));
+            CreateReferenceTransform(screen.transform, "ScreenCenter", new Vector3(0f, 0.068f, 0.014f));
+            CreateReferenceTransform(screen.transform, "CameraFocusPoint", new Vector3(0f, -0.58f, 0.024f));
 
             var hitArea = new GameObject("NotebookHitArea");
             hitArea.transform.SetParent(notebook.transform, false);

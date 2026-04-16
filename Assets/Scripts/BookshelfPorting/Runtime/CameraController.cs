@@ -22,7 +22,7 @@ namespace BookshelfPorting.Runtime
         [SerializeField] private Transform bookViewAnchor = null;
         [SerializeField] private float moveDuration = 0.4f;
         [SerializeField] private float overviewFieldOfView = 52f;
-        [SerializeField] private float whiteboardFieldOfView = 60f;
+        [SerializeField] private float whiteboardFieldOfView = 56f;
         [SerializeField] private float notebookFieldOfView = 24f;
         [SerializeField] private float notebookTransitionDuration = 0.75f;
         [SerializeField] private float frontalDefaultFieldOfView = 60f;
@@ -152,10 +152,10 @@ namespace BookshelfPorting.Runtime
             var cameraFocusPoint = screenTransform.Find("CameraFocusPoint");
             var screenCenter = screenCenterTransform != null
                 ? screenCenterTransform.position
-                : screenTransform.TransformPoint(new Vector3(0f, 0.062f, 0.014f));
+                : screenTransform.TransformPoint(new Vector3(0f, 0.068f, 0.014f));
             var cameraPosition = cameraFocusPoint != null
                 ? cameraFocusPoint.position
-                : screenTransform.TransformPoint(new Vector3(0f, -0.56f, 0.034f));
+                : screenTransform.TransformPoint(new Vector3(0f, -0.58f, 0.024f));
             var cameraRotation = Quaternion.LookRotation((screenCenter - cameraPosition).normalized, Vector3.up);
 
             CurrentMode = CameraMode.Notebook;
