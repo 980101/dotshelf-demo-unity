@@ -182,6 +182,24 @@ namespace BookshelfPorting.Runtime
             }
 
             ConfigureNotebookScreen();
+            if (CurrentFocusArea == ExperienceFocusArea.Notebook && notebookScreenController != null)
+            {
+                notebookScreenController.SetImmersiveMode(true);
+                notebookScreenController.ActivateDashboard();
+                return;
+            }
+
+            if (notebookScreenController != null)
+            {
+                notebookScreenController.SetImmersiveMode(false);
+                notebookScreenController.Show();
+            }
+
+            if (notebookScreenController != null)
+            {
+                notebookScreenController.QueueDashboardActivation();
+            }
+
             if (notebookScreenController != null && notebookScreenController.ScreenTransform != null)
             {
                 cameraController.MoveToNotebookScreen(notebookScreenController.ScreenTransform);
@@ -470,6 +488,12 @@ namespace BookshelfPorting.Runtime
         {
             if (mode == CameraMode.Notebook && CurrentFocusArea == ExperienceFocusArea.Notebook)
             {
+                if (notebookScreenController != null)
+                {
+                    notebookScreenController.EnterImmersiveDashboard();
+                    return;
+                }
+
                 ShowNotebookScreen();
             }
         }
@@ -505,12 +529,16 @@ namespace BookshelfPorting.Runtime
             if (CurrentFocusArea == ExperienceFocusArea.Notebook)
             {
                 CloseOverlayPanels();
-                HideNotebookScreen();
                 isHamburgerMenuOpen = false;
             }
             else
             {
-                HideNotebookScreen();
+                if (notebookScreenController != null)
+                {
+                    notebookScreenController.SetImmersiveMode(false);
+                }
+
+                ShowNotebookScreen();
             }
 
             RefreshHud();
@@ -821,7 +849,7 @@ namespace BookshelfPorting.Runtime
             }
 
             var screenTransform = notebookScreenController.transform.Find("Screen");
-            notebookScreenController.Configure(screenTransform, Camera.main, CloseNotebookFocus);
+            notebookScreenController.Configure(screenTransform, Camera.main, () => notebookScreenController.ReturnToScreenSaver());
         }
 
         private void ShowNotebookScreen()

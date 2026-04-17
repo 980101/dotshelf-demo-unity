@@ -580,7 +580,7 @@ namespace BookshelfPorting.Runtime
             CreateBox("ScreenLid", screen.transform, Vector3.zero, new Vector3(0.50f, 0.018f, 0.31f), aluminum);
             CreateBox("LowerBezelLip", screen.transform, new Vector3(0f, -0.0095f, 0.143f), new Vector3(0.478f, 0.009f, 0.015f), aluminum);
             CreateBox("BlackBezel", screen.transform, new Vector3(0f, -0.0105f, 0f), new Vector3(0.474f, 0.008f, 0.270f), darkGlass);
-            CreateBox("DisplayPanel", screen.transform, new Vector3(0f, -0.0135f, 0.002f), new Vector3(0.448f, 0.006f, 0.244f), screenGlow);
+            CreateBox("DisplayPanel", screen.transform, new Vector3(0f, -0.0135f, 0f), new Vector3(0.464f, 0.006f, 0.260f), screenGlow);
             CreateBox("CameraDot", screen.transform, new Vector3(0f, -0.0185f, -0.127f), new Vector3(0.012f, 0.004f, 0.012f), materialFactory.CreateBookMaterial(new Color(0.02f, 0.025f, 0.03f)));
             CreateReferenceTransform(screen.transform, "ScreenCenter", new Vector3(0f, 0.068f, 0.014f));
             CreateReferenceTransform(screen.transform, "CameraFocusPoint", new Vector3(0f, -0.58f, 0.024f));
