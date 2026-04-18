@@ -503,11 +503,6 @@ namespace BookshelfPorting.Runtime
 
             CreateBox("Frame", guestbook.transform, Vector3.zero, new Vector3(0.04f, 1.08f, 1.52f), materialFactory.GetWhiteboardFrameMaterial());
             CreateBox("Surface", guestbook.transform, new Vector3(0.012f, 0f, 0f), new Vector3(0.012f, 0.96f, 1.38f), materialFactory.GetWhiteboardSurfaceMaterial());
-            CreateBox("HeaderBar", guestbook.transform, new Vector3(0.02f, 0.37f, 0f), new Vector3(0.012f, 0.12f, 1.12f), materialFactory.CreateBookMaterial(new Color(0.85f, 0.54f, 0.27f)));
-            CreateBox("MessageCardA", guestbook.transform, new Vector3(0.022f, 0.1f, -0.3f), new Vector3(0.01f, 0.24f, 0.36f), materialFactory.CreateBookMaterial(new Color(0.96f, 0.92f, 0.74f)));
-            CreateBox("MessageCardB", guestbook.transform, new Vector3(0.022f, 0.02f, 0.1f), new Vector3(0.01f, 0.19f, 0.28f), materialFactory.CreateBookMaterial(new Color(0.78f, 0.89f, 0.95f)));
-            CreateBox("MessageCardC", guestbook.transform, new Vector3(0.022f, -0.18f, 0.34f), new Vector3(0.01f, 0.22f, 0.32f), materialFactory.CreateBookMaterial(new Color(0.94f, 0.82f, 0.86f)));
-            CreateBox("ShelfTray", guestbook.transform, new Vector3(0.035f, -0.44f, 0f), new Vector3(0.09f, 0.035f, 1.08f), materialFactory.GetWhiteboardFrameMaterial());
 
             var hitArea = new GameObject("GuestbookHitArea");
             hitArea.transform.SetParent(guestbook.transform, false);
