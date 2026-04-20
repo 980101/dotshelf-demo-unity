@@ -29,6 +29,7 @@ namespace BookshelfPorting.Runtime
             var interactionController = systems.AddComponent<BookInteractionController>();
             var runtimeDataStore = systems.AddComponent<BookshelfRuntimeDataStore>();
             var experienceManager = systems.AddComponent<BookshelfExperienceManager>();
+            var roomObjectEditingManager = systems.AddComponent<RoomObjectEditingManager>();
             var environment = systems.AddComponent<EnvironmentSetup>();
 
             var camerasRoot = new GameObject("Cameras").transform;
@@ -65,6 +66,7 @@ namespace BookshelfPorting.Runtime
             interactionController.Configure(state, generator, cameraController, materialFactory, mainCamera, experienceManager);
             runtimeDataStore.Configure(state, materialFactory);
             experienceManager.Configure(state, cameraController, interactionController, materialFactory, runtimeDataStore, generator);
+            roomObjectEditingManager.Configure(generator, experienceManager, mainCamera);
             environment.Configure(probe, null);
 
             mainCamera.transform.position = overviewAnchor.position;

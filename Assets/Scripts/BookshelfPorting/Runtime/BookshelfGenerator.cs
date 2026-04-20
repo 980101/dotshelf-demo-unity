@@ -10,6 +10,9 @@ namespace BookshelfPorting.Runtime
         private const float BookshelfAnchorZ = 1.285f;
         private const float BookshelfFadeDuration = 0.22f;
         private const string HamhamAssetPath = "Assets/Meshy_AI_Hamham_0416082404_texture.glb";
+        private const string BookStackAssetPath = "Assets/Arts/Models/Props/book_stack.glb";
+        private const string FloorLampAssetPath = "Assets/Arts/Models/Props/lamp_floor.glb";
+        private const string NaturalRugAssetPath = "Assets/Arts/Models/Props/rug_natural.glb";
         private const string QABooksBaseTexturePath = "Assets/QA_Books/Textures/BooksA_bc.tga";
         private const string QABooksNormalTexturePath = "Assets/QA_Books/Textures/BooksA_n.tga";
         private const string QABooksMetallicTexturePath = "Assets/QA_Books/Textures/BooksA_m_ao_g.tga";
@@ -24,6 +27,9 @@ namespace BookshelfPorting.Runtime
         [SerializeField] private Transform bookshelfRoot = null;
         [SerializeField] private Transform booksRoot = null;
         [SerializeField] private GameObject hamhamModelAsset = null;
+        [SerializeField] private GameObject bookStackModelAsset = null;
+        [SerializeField] private GameObject floorLampModelAsset = null;
+        [SerializeField] private GameObject naturalRugModelAsset = null;
         [SerializeField] private Texture2D qaBooksBaseMap = null;
         [SerializeField] private Texture2D qaBooksNormalMap = null;
         [SerializeField] private Texture2D qaBooksMaskMap = null;
@@ -42,6 +48,21 @@ namespace BookshelfPorting.Runtime
         [SerializeField] private float backPanelThickness = 0.012f;
         [SerializeField] private float booksForwardZ = 0.12f;
 
+        [Header("Wall Finish")]
+        [SerializeField] private float wallBottomHeight = 0.90f;
+        [SerializeField] private float wallTrimHeight = 0.06f;
+
+        [Header("Decor Props")]
+        [SerializeField] private float bookStackScreenLeftDistance = 0.62f;
+        [SerializeField] private float bookStackTargetHeight = 0.182f;
+        [SerializeField] private float bookStackYaw = 18f;
+        [SerializeField] private Vector3 floorLampGuestbookLocalPosition = new Vector3(0.30f, -1.18f, 0.98f);
+        [SerializeField] private float floorLampTargetHeight = 1.48f;
+        [SerializeField] private float floorLampYaw = 0f;
+        [SerializeField] private Vector3 naturalRugLocalPosition = new Vector3(0f, 0.002f, 0.40f);
+        [SerializeField] private Vector2 naturalRugTargetFootprint = new Vector2(1.55f, 0.98f);
+        [SerializeField] private float naturalRugYaw = 0f;
+
         [Header("Defaults")]
         [SerializeField] private int booksPerSection = 3;
         [SerializeField] private Vector2 thicknessRange = new Vector2(0.025f, 0.045f);
@@ -54,10 +75,12 @@ namespace BookshelfPorting.Runtime
         private readonly List<GameObject> qaBookPrefabs = new List<GameObject>();
         private Material qaBooksMaterial;
         private Material qaBooksAltMaterial;
+        private Material roomSelectionMaterial;
         private Coroutine bookshelfSwitchCoroutine;
         private int activeBookshelfIndex;
 
         public Transform BooksRoot => booksRoot;
+        public Transform RoomRoot => roomRoot;
         public bool IsBookshelfSwitching => bookshelfSwitchCoroutine != null;
         public int BookshelfCount => BookshelfVariantCount;
         public int ActiveBookshelfIndex => activeBookshelfIndex;
@@ -67,6 +90,32 @@ namespace BookshelfPorting.Runtime
         {
             state = bookshelfState;
             materialFactory = factory;
+        }
+
+        public float GetDefaultPlacementHeight(RoomPlaceableType type)
+        {
+            return type == RoomPlaceableType.NaturalRug
+                ? naturalRugLocalPosition.y
+                : 0f;
+        }
+
+        public RoomEditableObject SpawnRoomPlaceable(RoomPlaceableType type, Vector3 worldPosition, Quaternion worldRotation)
+        {
+            EnsureRoots();
+
+            switch (type)
+            {
+                case RoomPlaceableType.Hamham:
+                    return CreateHamhamDisplay(roomRoot != null ? roomRoot : transform, worldPosition, worldRotation, true);
+                case RoomPlaceableType.BookStack:
+                    return CreateBookStackDisplay(roomRoot, worldPosition, worldRotation, true);
+                case RoomPlaceableType.FloorLamp:
+                    return CreateFloorLampDisplay(roomRoot, worldPosition, worldRotation, true);
+                case RoomPlaceableType.NaturalRug:
+                    return CreateNaturalRugDisplay(roomRoot, worldPosition, worldRotation, true);
+                default:
+                    return null;
+            }
         }
 
         private void Start()
@@ -139,11 +188,13 @@ namespace BookshelfPorting.Runtime
         private void BuildRoom()
         {
             CreateBox("Floor", roomRoot, new Vector3(0f, -0.05f, 0f), new Vector3(4.2f, 0.1f, 4.2f), materialFactory.GetFloorMaterial());
-            CreateBox("BackWall", roomRoot, new Vector3(0f, 1.4f, 1.45f), new Vector3(4.2f, 2.8f, 0.08f), materialFactory.GetWallMaterial());
-            CreateBox("LeftWall", roomRoot, new Vector3(-2.05f, 1.4f, 0f), new Vector3(0.08f, 2.8f, 4.2f), materialFactory.GetWallMaterial());
-            CreateBox("RightWall", roomRoot, new Vector3(2.05f, 1.4f, 0f), new Vector3(0.08f, 2.8f, 4.2f), materialFactory.GetWallMaterial());
+            BuildDecoratedWall("BackWall", roomRoot, new Vector3(0f, 1.4f, 1.45f), new Vector3(4.2f, 2.8f, 0.08f));
+            BuildDecoratedWall("LeftWall", roomRoot, new Vector3(-2.05f, 1.4f, 0f), new Vector3(0.08f, 2.8f, 4.2f));
+            BuildDecoratedWall("RightWall", roomRoot, new Vector3(2.05f, 1.4f, 0f), new Vector3(0.08f, 2.8f, 4.2f));
 
+            BuildNaturalRugDisplay();
             BuildGuestbookBoard();
+            BuildFloorLampDisplay();
             BuildNotebookStation();
         }
 
@@ -400,7 +451,14 @@ namespace BookshelfPorting.Runtime
             var colliders = root.GetComponentsInChildren<Collider>();
             for (var i = 0; i < colliders.Length; i++)
             {
-                DestroyImmediate(colliders[i]);
+                if (Application.isPlaying)
+                {
+                    Destroy(colliders[i]);
+                }
+                else
+                {
+                    DestroyImmediate(colliders[i]);
+                }
             }
         }
 
@@ -460,28 +518,56 @@ namespace BookshelfPorting.Runtime
             generatedGeometry.Add(box);
         }
 
-        private void BuildHamhamDisplay()
+        // Keep the existing wall footprint but split the finish into stacked bands
+        // so each section can tile independently without stretching.
+        private void BuildDecoratedWall(string name, Transform parent, Vector3 localPosition, Vector3 localScale)
         {
-            var hamhamAsset = ResolveHamhamAsset();
-            if (hamhamAsset == null)
+            var wallRoot = new GameObject(name);
+            wallRoot.transform.SetParent(parent, false);
+            wallRoot.transform.localPosition = localPosition;
+            wallRoot.transform.localRotation = Quaternion.identity;
+            generatedGeometry.Add(wallRoot);
+
+            var bottomHeight = Mathf.Clamp(wallBottomHeight, 0.35f, localScale.y - 0.25f);
+            var trimHeight = Mathf.Clamp(wallTrimHeight, 0.03f, localScale.y - bottomHeight - 0.15f);
+            var topHeight = localScale.y - bottomHeight - trimHeight;
+
+            if (topHeight < 0.15f)
             {
-                return;
+                topHeight = 0.15f;
+                bottomHeight = localScale.y - trimHeight - topHeight;
             }
 
-            var hamhamRoot = new GameObject("HamhamDisplay");
-            hamhamRoot.transform.SetParent(transform, false);
-            hamhamRoot.transform.localPosition = bookshelfRoot.localPosition + new Vector3(width * 0.5f + 0.42f, 0f, -0.05f);
-            hamhamRoot.transform.localRotation = Quaternion.Euler(0f, 152f, 0f);
-            hamhamRoot.transform.localScale = Vector3.one * 0.42f;
-            generatedGeometry.Add(hamhamRoot);
+            var wallBaseY = -localScale.y * 0.5f;
 
-            var instance = Instantiate(hamhamAsset, hamhamRoot.transform);
-            instance.name = hamhamAsset.name;
-            instance.transform.localPosition = Vector3.zero;
-            instance.transform.localRotation = Quaternion.identity;
-            instance.transform.localScale = Vector3.one;
+            CreateBox(
+                "BottomPanel",
+                wallRoot.transform,
+                new Vector3(0f, wallBaseY + bottomHeight * 0.5f, 0f),
+                new Vector3(localScale.x, bottomHeight, localScale.z),
+                materialFactory.GetWallBottomMaterial());
 
-            AlignModelToFloor(hamhamRoot.transform, instance.transform);
+            CreateBox(
+                "TrimMolding",
+                wallRoot.transform,
+                new Vector3(0f, wallBaseY + bottomHeight + trimHeight * 0.5f, 0f),
+                new Vector3(localScale.x, trimHeight, localScale.z),
+                materialFactory.GetWallTrimMaterial());
+
+            CreateBox(
+                "TopWallpaper",
+                wallRoot.transform,
+                new Vector3(0f, wallBaseY + bottomHeight + trimHeight + topHeight * 0.5f, 0f),
+                new Vector3(localScale.x, topHeight, localScale.z),
+                materialFactory.GetWallTopMaterial());
+        }
+
+        private void BuildHamhamDisplay()
+        {
+            var parent = roomRoot != null ? roomRoot : transform;
+            var worldPosition = transform.TransformPoint(bookshelfRoot.localPosition + new Vector3(width * 0.5f + 0.42f, 0f, -0.05f));
+            var worldRotation = transform.rotation * Quaternion.Euler(0f, 152f, 0f);
+            CreateHamhamDisplay(parent, worldPosition, worldRotation, true);
         }
 
         private GameObject ResolveHamhamAsset()
@@ -496,6 +582,354 @@ namespace BookshelfPorting.Runtime
 #endif
 
             return hamhamModelAsset;
+        }
+
+        private void BuildBookStackDisplay(Transform notebookStation, Transform screen)
+        {
+            var bookStackAsset = ResolveBookStackAsset();
+            if (bookStackAsset == null || notebookStation == null || roomRoot == null)
+            {
+                return;
+            }
+
+            var sideDirection = screen != null
+                ? Vector3.ProjectOnPlane(screen.right, Vector3.up)
+                : Vector3.left;
+
+            if (sideDirection.sqrMagnitude <= Mathf.Epsilon)
+            {
+                sideDirection = Vector3.right;
+            }
+
+            sideDirection.Normalize();
+
+            var worldPosition = notebookStation.position + sideDirection * bookStackScreenLeftDistance;
+            var worldRotation = roomRoot.rotation * Quaternion.Euler(0f, bookStackYaw, 0f);
+            CreateBookStackDisplay(roomRoot, worldPosition, worldRotation, true);
+        }
+
+        private void BuildFloorLampDisplay()
+        {
+            var floorLampAsset = ResolveFloorLampAsset();
+            if (floorLampAsset == null)
+            {
+                return;
+            }
+
+            var guestbook = roomRoot != null ? roomRoot.Find("GuestbookBoard") : null;
+            var parent = guestbook != null ? guestbook : roomRoot;
+            if (parent == null)
+            {
+                return;
+            }
+
+            var localPosition = guestbook != null
+                ? floorLampGuestbookLocalPosition
+                : new Vector3(-1.70f, 0f, 1.10f);
+            var worldPosition = parent.TransformPoint(localPosition);
+            var worldRotation = parent.rotation * Quaternion.Euler(0f, floorLampYaw, 0f);
+            CreateFloorLampDisplay(parent, worldPosition, worldRotation, true);
+        }
+
+        private void BuildNaturalRugDisplay()
+        {
+            var naturalRugAsset = ResolveNaturalRugAsset();
+            if (naturalRugAsset == null || roomRoot == null)
+            {
+                return;
+            }
+
+            var worldPosition = roomRoot.TransformPoint(naturalRugLocalPosition);
+            var worldRotation = roomRoot.rotation * Quaternion.Euler(0f, naturalRugYaw, 0f);
+            CreateNaturalRugDisplay(roomRoot, worldPosition, worldRotation, true);
+        }
+
+        private GameObject ResolveFloorLampAsset()
+        {
+            if (floorLampModelAsset != null)
+            {
+                return floorLampModelAsset;
+            }
+
+#if UNITY_EDITOR
+            floorLampModelAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(FloorLampAssetPath);
+#endif
+
+            return floorLampModelAsset;
+        }
+
+        private GameObject ResolveBookStackAsset()
+        {
+            if (bookStackModelAsset != null)
+            {
+                return bookStackModelAsset;
+            }
+
+#if UNITY_EDITOR
+            bookStackModelAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BookStackAssetPath);
+#endif
+
+            return bookStackModelAsset;
+        }
+
+        private GameObject ResolveNaturalRugAsset()
+        {
+            if (naturalRugModelAsset != null)
+            {
+                return naturalRugModelAsset;
+            }
+
+#if UNITY_EDITOR
+            naturalRugModelAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(NaturalRugAssetPath);
+#endif
+
+            return naturalRugModelAsset;
+        }
+
+        private RoomEditableObject CreateHamhamDisplay(Transform parent, Vector3 worldPosition, Quaternion worldRotation, bool registerGenerated)
+        {
+            var hamhamAsset = ResolveHamhamAsset();
+            if (hamhamAsset == null || parent == null)
+            {
+                return null;
+            }
+
+            var hamhamRoot = CreateRoomPropRoot("HamhamDisplay", parent, worldPosition, worldRotation, Vector3.one * 0.42f, registerGenerated);
+            var instance = Instantiate(hamhamAsset, hamhamRoot.transform);
+            instance.name = hamhamAsset.name;
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+
+            RemoveChildColliders(instance.transform);
+            AlignModelToFloor(hamhamRoot.transform, instance.transform);
+            return FinalizeEditableRoomObject(hamhamRoot, RoomPlaceableType.Hamham, "Hamham");
+        }
+
+        private RoomEditableObject CreateBookStackDisplay(Transform parent, Vector3 worldPosition, Quaternion worldRotation, bool registerGenerated)
+        {
+            var bookStackAsset = ResolveBookStackAsset();
+            if (bookStackAsset == null || parent == null)
+            {
+                return null;
+            }
+
+            var bookStackRoot = CreateRoomPropRoot("BookStackDisplay", parent, worldPosition, worldRotation, Vector3.one, registerGenerated);
+            var instance = Instantiate(bookStackAsset, bookStackRoot.transform);
+            instance.name = bookStackAsset.name;
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+
+            RemoveChildColliders(instance.transform);
+            CenterChildVisual(bookStackRoot.transform);
+            ScaleModelToHeight(bookStackRoot.transform, bookStackTargetHeight);
+            AlignModelToFloor(bookStackRoot.transform, instance.transform);
+            return FinalizeEditableRoomObject(bookStackRoot, RoomPlaceableType.BookStack, "Book Stack");
+        }
+
+        private RoomEditableObject CreateFloorLampDisplay(Transform parent, Vector3 worldPosition, Quaternion worldRotation, bool registerGenerated)
+        {
+            var floorLampAsset = ResolveFloorLampAsset();
+            if (floorLampAsset == null || parent == null)
+            {
+                return null;
+            }
+
+            var floorLampRoot = CreateRoomPropRoot("FloorLampDisplay", parent, worldPosition, worldRotation, Vector3.one, registerGenerated);
+            var instance = Instantiate(floorLampAsset, floorLampRoot.transform);
+            instance.name = floorLampAsset.name;
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+
+            RemoveChildColliders(instance.transform);
+            ScaleModelToHeight(floorLampRoot.transform, floorLampTargetHeight);
+            AlignModelToFloor(floorLampRoot.transform, instance.transform);
+            return FinalizeEditableRoomObject(floorLampRoot, RoomPlaceableType.FloorLamp, "Floor Lamp");
+        }
+
+        private RoomEditableObject CreateNaturalRugDisplay(Transform parent, Vector3 worldPosition, Quaternion worldRotation, bool registerGenerated)
+        {
+            var naturalRugAsset = ResolveNaturalRugAsset();
+            if (naturalRugAsset == null || parent == null)
+            {
+                return null;
+            }
+
+            var rugRoot = CreateRoomPropRoot("NaturalRugDisplay", parent, worldPosition, worldRotation, Vector3.one, registerGenerated);
+            var instance = Instantiate(naturalRugAsset, rugRoot.transform);
+            instance.name = naturalRugAsset.name;
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+
+            RemoveChildColliders(instance.transform);
+            OrientModelFlatToFloor(rugRoot.transform, instance.transform);
+            AlignFlatModelLongAxisToX(rugRoot.transform, instance.transform);
+            CenterChildVisual(rugRoot.transform);
+            ScaleModelToFootprint(rugRoot.transform, naturalRugTargetFootprint);
+            AlignModelToFloor(rugRoot.transform, instance.transform);
+            return FinalizeEditableRoomObject(rugRoot, RoomPlaceableType.NaturalRug, "Natural Rug");
+        }
+
+        private GameObject CreateRoomPropRoot(
+            string name,
+            Transform parent,
+            Vector3 worldPosition,
+            Quaternion worldRotation,
+            Vector3 localScale,
+            bool registerGenerated)
+        {
+            var root = new GameObject(name);
+            root.transform.SetParent(parent, false);
+            root.transform.position = worldPosition;
+            root.transform.rotation = worldRotation;
+            root.transform.localScale = localScale;
+
+            if (registerGenerated)
+            {
+                generatedGeometry.Add(root);
+            }
+
+            return root;
+        }
+
+        private RoomEditableObject FinalizeEditableRoomObject(GameObject root, RoomPlaceableType type, string displayName)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            var editableObject = root.GetComponent<RoomEditableObject>();
+            if (editableObject == null)
+            {
+                editableObject = root.AddComponent<RoomEditableObject>();
+            }
+
+            var localBounds = CalculateLocalBounds(root.transform, root.GetComponentsInChildren<Renderer>());
+            editableObject.Initialize(type, displayName, localBounds, GetRoomSelectionMaterial());
+            return editableObject;
+        }
+
+        private Material GetRoomSelectionMaterial()
+        {
+            if (roomSelectionMaterial == null && materialFactory != null)
+            {
+                roomSelectionMaterial = materialFactory.CreateBookMaterial(new Color(0.96f, 0.64f, 0.18f));
+            }
+
+            return roomSelectionMaterial;
+        }
+
+        private static void ScaleModelToHeight(Transform root, float targetHeight)
+        {
+            if (root == null || targetHeight <= 0f)
+            {
+                return;
+            }
+
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            if (renderers == null || renderers.Length == 0)
+            {
+                return;
+            }
+
+            var bounds = renderers[0].bounds;
+            for (var i = 1; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
+                {
+                    bounds.Encapsulate(renderers[i].bounds);
+                }
+            }
+
+            if (bounds.size.y <= Mathf.Epsilon)
+            {
+                return;
+            }
+
+            root.localScale *= targetHeight / bounds.size.y;
+        }
+
+        private static void ScaleModelToFootprint(Transform root, Vector2 targetFootprint)
+        {
+            if (root == null || targetFootprint.x <= 0f || targetFootprint.y <= 0f)
+            {
+                return;
+            }
+
+            var bounds = CalculateLocalBounds(root, root.GetComponentsInChildren<Renderer>());
+            if (bounds.size.x <= Mathf.Epsilon || bounds.size.z <= Mathf.Epsilon)
+            {
+                return;
+            }
+
+            var scaleX = targetFootprint.x / bounds.size.x;
+            var scaleZ = targetFootprint.y / bounds.size.z;
+            root.localScale *= Mathf.Min(scaleX, scaleZ);
+        }
+
+        private static void OrientModelFlatToFloor(Transform root, Transform modelRoot)
+        {
+            if (root == null || modelRoot == null)
+            {
+                return;
+            }
+
+            var candidateRotations = new[]
+            {
+                Quaternion.identity,
+                Quaternion.Euler(90f, 0f, 0f),
+                Quaternion.Euler(-90f, 0f, 0f),
+                Quaternion.Euler(0f, 0f, 90f),
+                Quaternion.Euler(0f, 0f, -90f),
+                Quaternion.Euler(180f, 0f, 0f)
+            };
+
+            var bestRotation = modelRoot.localRotation;
+            var bestHeight = float.MaxValue;
+            var bestArea = float.MinValue;
+
+            for (var i = 0; i < candidateRotations.Length; i++)
+            {
+                modelRoot.localPosition = Vector3.zero;
+                modelRoot.localRotation = candidateRotations[i];
+                modelRoot.localScale = Vector3.one;
+
+                var bounds = CalculateLocalBounds(root, root.GetComponentsInChildren<Renderer>());
+                var height = bounds.size.y;
+                var floorArea = bounds.size.x * bounds.size.z;
+
+                if (height < bestHeight - 0.0001f ||
+                    (Mathf.Abs(height - bestHeight) <= 0.0001f && floorArea > bestArea))
+                {
+                    bestHeight = height;
+                    bestArea = floorArea;
+                    bestRotation = candidateRotations[i];
+                }
+            }
+
+            modelRoot.localPosition = Vector3.zero;
+            modelRoot.localRotation = bestRotation;
+            modelRoot.localScale = Vector3.one;
+        }
+
+        private static void AlignFlatModelLongAxisToX(Transform root, Transform modelRoot)
+        {
+            if (root == null || modelRoot == null)
+            {
+                return;
+            }
+
+            var bounds = CalculateLocalBounds(root, root.GetComponentsInChildren<Renderer>());
+            if (bounds.size.z <= bounds.size.x)
+            {
+                return;
+            }
+
+            modelRoot.localRotation = modelRoot.localRotation * Quaternion.Euler(0f, 90f, 0f);
         }
 
         private static void AlignModelToFloor(Transform root, Transform modelRoot)
@@ -808,6 +1242,7 @@ namespace BookshelfPorting.Runtime
             generatedGeometry.Add(hitArea);
 
             notebook.AddComponent<NotebookScreenController>();
+            BuildBookStackDisplay(notebookStation.transform, screen.transform);
         }
 
         private static void CreateReferenceTransform(Transform parent, string name, Vector3 localPosition)

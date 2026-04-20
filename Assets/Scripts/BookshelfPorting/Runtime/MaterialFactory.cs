@@ -11,23 +11,49 @@ namespace BookshelfPorting.Runtime
 
     public class MaterialFactory : MonoBehaviour
     {
+        private const string FloorTexturePath = "Assets/Arts/Textures/Floor/floor.png";
+        private const string WallTopTexturePath = "Assets/Arts/Textures/Wall/wall_top_check_beige.png";
+        private const string WallBottomTexturePath = "Assets/Arts/Textures/Wall/wall_bottom_panel_ivory.png";
+        private const string WallTrimTexturePath = "Assets/Arts/Textures/Wall/wall_trim_molding_ivory.png";
+
         [Header("Wood")]
         [SerializeField] private Texture2D woodBaseMap = null;
         [SerializeField] private Texture2D woodNormalMap = null;
         [SerializeField] private float bookshelfSmoothness = 0.42f;
-        [SerializeField] private float floorSmoothness = 0.28f;
+        [SerializeField] private float floorSmoothness = 0.18f;
 
         [Header("Flat Colors")]
         [SerializeField] private Color wallColor = new Color(0.93f, 0.90f, 0.84f);
+        [SerializeField] private Color wallTopTint = new Color(1f, 0.995f, 0.985f);
+        [SerializeField] private Color wallBottomTint = new Color(1f, 0.99f, 0.975f);
+        [SerializeField] private Color wallTrimTint = new Color(0.995f, 0.985f, 0.965f);
         [SerializeField] private Color whiteboardFrameColor = new Color(0.34f, 0.26f, 0.18f);
         [SerializeField] private Color whiteboardSurfaceColor = new Color(0.96f, 0.97f, 0.95f);
         [SerializeField] private Color ghostColor = new Color(0.25f, 0.85f, 1f, 0.25f);
         [SerializeField] private Color bookshelfTint = Color.white;
 
+        [Header("Wall Textures")]
+        [SerializeField] private Texture2D floorBaseMap = null;
+        [SerializeField] private Texture2D wallTopBaseMap = null;
+        [SerializeField] private Texture2D wallBottomBaseMap = null;
+        [SerializeField] private Texture2D wallTrimBaseMap = null;
+
+        [Header("Floor Tiling")]
+        [SerializeField] private Vector2 floorTiling = new Vector2(3.0f, 3.0f);
+
+        [Header("Wall Tiling")]
+        [SerializeField] private Vector2 wallTopTiling = new Vector2(4.5f, 3f);
+        [SerializeField] private Vector2 wallBottomTiling = new Vector2(2.6f, 1.1f);
+        [SerializeField] private Vector2 wallTrimTiling = new Vector2(6.5f, 1f);
+        [SerializeField] private float wallSectionSmoothness = 0.03f;
+
         private Material bookshelfWoodMaterial;
         private Material furnitureWoodMaterial;
         private Material floorMaterial;
         private Material wallMaterial;
+        private Material wallTopMaterial;
+        private Material wallBottomMaterial;
+        private Material wallTrimMaterial;
         private Material whiteboardFrameMaterial;
         private Material whiteboardSurfaceMaterial;
         private Material ghostMaterial;
@@ -53,7 +79,10 @@ namespace BookshelfPorting.Runtime
         {
             if (floorMaterial == null)
             {
-                floorMaterial = CreateLitMaterial("FloorWood", woodBaseMap, woodNormalMap, Color.white, floorSmoothness, false);
+                EnsureFloorTextureLoaded();
+                floorMaterial = floorBaseMap != null
+                    ? CreateTiledLitMaterial("FloorWood", floorBaseMap, Color.white, floorSmoothness, floorTiling)
+                    : CreateLitMaterial("FloorWood", woodBaseMap, woodNormalMap, Color.white, floorSmoothness, false);
             }
 
             return floorMaterial;
@@ -77,6 +106,39 @@ namespace BookshelfPorting.Runtime
             }
 
             return wallMaterial;
+        }
+
+        public Material GetWallTopMaterial()
+        {
+            if (wallTopMaterial == null)
+            {
+                EnsureWallTexturesLoaded();
+                wallTopMaterial = CreateTiledLitMaterial("WallTopCheck", wallTopBaseMap, wallTopTint, wallSectionSmoothness, wallTopTiling);
+            }
+
+            return wallTopMaterial;
+        }
+
+        public Material GetWallBottomMaterial()
+        {
+            if (wallBottomMaterial == null)
+            {
+                EnsureWallTexturesLoaded();
+                wallBottomMaterial = CreateTiledLitMaterial("WallBottomPanel", wallBottomBaseMap, wallBottomTint, wallSectionSmoothness, wallBottomTiling);
+            }
+
+            return wallBottomMaterial;
+        }
+
+        public Material GetWallTrimMaterial()
+        {
+            if (wallTrimMaterial == null)
+            {
+                EnsureWallTexturesLoaded();
+                wallTrimMaterial = CreateTiledLitMaterial("WallTrimMolding", wallTrimBaseMap, wallTrimTint, wallSectionSmoothness, wallTrimTiling);
+            }
+
+            return wallTrimMaterial;
         }
 
         public Material GetWhiteboardFrameMaterial()
@@ -151,12 +213,70 @@ namespace BookshelfPorting.Runtime
             material.SetFloat("_Smoothness", smoothness);
         }
 
+        private void EnsureWallTexturesLoaded()
+        {
+#if UNITY_EDITOR
+            if (wallTopBaseMap == null)
+            {
+                wallTopBaseMap = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(WallTopTexturePath);
+            }
+
+            if (wallBottomBaseMap == null)
+            {
+                wallBottomBaseMap = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(WallBottomTexturePath);
+            }
+
+            if (wallTrimBaseMap == null)
+            {
+                wallTrimBaseMap = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(WallTrimTexturePath);
+            }
+#endif
+
+            ConfigureTextureForTiling(wallTopBaseMap);
+            ConfigureTextureForTiling(wallBottomBaseMap);
+            ConfigureTextureForTiling(wallTrimBaseMap);
+        }
+
+        private void EnsureFloorTextureLoaded()
+        {
+#if UNITY_EDITOR
+            if (floorBaseMap == null)
+            {
+                floorBaseMap = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(FloorTexturePath);
+            }
+#endif
+
+            ConfigureTextureForTiling(floorBaseMap);
+        }
+
+        private static Material CreateTiledLitMaterial(string name, Texture2D baseMap, Color color, float smoothness, Vector2 tiling)
+        {
+            var material = CreateLitMaterial(name, baseMap, null, color, smoothness, false);
+            material.SetTextureScale("_BaseMap", tiling);
+            material.mainTextureScale = tiling;
+            material.SetTextureOffset("_BaseMap", Vector2.zero);
+            return material;
+        }
+
+        private static void ConfigureTextureForTiling(Texture2D texture)
+        {
+            if (texture == null)
+            {
+                return;
+            }
+
+            texture.wrapMode = TextureWrapMode.Repeat;
+            texture.filterMode = FilterMode.Bilinear;
+            texture.anisoLevel = Mathf.Max(texture.anisoLevel, 2);
+        }
+
         private static Material CreateLitMaterial(string name, Texture2D baseMap, Texture2D normalMap, Color color, float smoothness, bool transparent)
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit");
             var material = new Material(shader) { name = name };
             material.SetColor("_BaseColor", color);
             material.color = color;
+            material.SetFloat("_Metallic", 0f);
             material.SetFloat("_Smoothness", smoothness);
 
             if (baseMap != null)
