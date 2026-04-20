@@ -8,6 +8,17 @@ namespace BookshelfPorting.Runtime
 {
     public class RoomObjectEditingManager : MonoBehaviour
     {
+        private static readonly Vector2[] SpawnViewportSamples =
+        {
+            new Vector2(0.50f, 0.28f),
+            new Vector2(0.50f, 0.22f),
+            new Vector2(0.42f, 0.24f),
+            new Vector2(0.58f, 0.24f),
+            new Vector2(0.50f, 0.16f),
+            new Vector2(0.35f, 0.18f),
+            new Vector2(0.65f, 0.18f),
+        };
+
         private readonly struct PointerState
         {
             public PointerState(bool isValid, Vector2 position, bool wasPressed, bool isPressed, bool wasReleased, int pointerId)
@@ -373,6 +384,17 @@ namespace BookshelfPorting.Runtime
                 return targetPosition;
             }
 
+            if (TryGetVisibleSpawnPosition(floorHeight, out var visibleSpawnPosition))
+            {
+                return visibleSpawnPosition;
+            }
+
+            targetPosition = ClampToFloorBounds(targetPosition, null);
+            if (IsWorldPositionVisible(targetPosition))
+            {
+                return targetPosition;
+            }
+
             var flatForward = Vector3.ProjectOnPlane(sceneCamera.transform.forward, Vector3.up);
             if (flatForward.sqrMagnitude <= Mathf.Epsilon)
             {
@@ -382,7 +404,12 @@ namespace BookshelfPorting.Runtime
             flatForward.Normalize();
             var candidate = sceneCamera.transform.position + flatForward * spawnDistanceFromCamera;
             targetPosition = new Vector3(candidate.x, floorHeight, candidate.z);
-            return ClampToFloorBounds(targetPosition, null);
+            targetPosition = ClampToFloorBounds(targetPosition, null);
+            return IsWorldPositionVisible(targetPosition)
+                ? targetPosition
+                : hasRoomFloorBounds
+                    ? new Vector3(roomFloorBounds.center.x, floorHeight, roomFloorBounds.center.z)
+                    : targetPosition;
         }
 
         private Quaternion GetSpawnRotation()
@@ -400,17 +427,80 @@ namespace BookshelfPorting.Runtime
 
         private bool TryGetPlacementPoint(Vector2 screenPosition, out Vector3 placementPoint)
         {
-            placementPoint = Vector3.zero;
+            if (sceneCamera == null)
+            {
+                placementPoint = Vector3.zero;
+                return false;
+            }
+
+            var floorHeight = selectedObject != null ? selectedObject.FloorHeight : 0f;
+            return TryGetPlacementPoint(sceneCamera.ScreenPointToRay(screenPosition), floorHeight, out placementPoint);
+        }
+
+        private bool TryGetVisibleSpawnPosition(float floorHeight, out Vector3 spawnPosition)
+        {
+            spawnPosition = Vector3.zero;
             if (sceneCamera == null)
             {
                 return false;
             }
 
-            var floorHeight = selectedObject != null ? selectedObject.FloorHeight : 0f;
+            for (var i = 0; i < SpawnViewportSamples.Length; i++)
+            {
+                if (!TryGetViewportPlacementPoint(SpawnViewportSamples[i], floorHeight, out var placementPoint))
+                {
+                    continue;
+                }
+
+                if (!IsWithinFloorBounds(placementPoint, null))
+                {
+                    continue;
+                }
+
+                spawnPosition = new Vector3(placementPoint.x, floorHeight, placementPoint.z);
+                return true;
+            }
+
+            for (var i = 0; i < SpawnViewportSamples.Length; i++)
+            {
+                if (!TryGetViewportPlacementPoint(SpawnViewportSamples[i], floorHeight, out var placementPoint))
+                {
+                    continue;
+                }
+
+                var clampedPosition = ClampToFloorBounds(new Vector3(placementPoint.x, floorHeight, placementPoint.z), null);
+                if (!IsWorldPositionVisible(clampedPosition))
+                {
+                    continue;
+                }
+
+                spawnPosition = clampedPosition;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryGetViewportPlacementPoint(Vector2 viewportPosition, float floorHeight, out Vector3 placementPoint)
+        {
+            if (sceneCamera == null)
+            {
+                placementPoint = Vector3.zero;
+                return false;
+            }
+
+            return TryGetPlacementPoint(
+                sceneCamera.ViewportPointToRay(new Vector3(viewportPosition.x, viewportPosition.y, 0f)),
+                floorHeight,
+                out placementPoint);
+        }
+
+        private static bool TryGetPlacementPoint(Ray ray, float floorHeight, out Vector3 placementPoint)
+        {
             var plane = new Plane(Vector3.up, new Vector3(0f, floorHeight, 0f));
-            var ray = sceneCamera.ScreenPointToRay(screenPosition);
             if (!plane.Raycast(ray, out var distance))
             {
+                placementPoint = Vector3.zero;
                 return false;
             }
 
@@ -425,20 +515,7 @@ namespace BookshelfPorting.Runtime
                 return worldPosition;
             }
 
-            var paddingX = minimumPlacementPadding;
-            var paddingZ = minimumPlacementPadding;
-
-            if (editableObject != null && editableObject.InteractionCollider != null)
-            {
-                var extents = editableObject.InteractionCollider.bounds.extents;
-                paddingX = Mathf.Max(paddingX, extents.x);
-                paddingZ = Mathf.Max(paddingZ, extents.z);
-            }
-
-            var minX = roomFloorBounds.min.x + paddingX;
-            var maxX = roomFloorBounds.max.x - paddingX;
-            var minZ = roomFloorBounds.min.z + paddingZ;
-            var maxZ = roomFloorBounds.max.z - paddingZ;
+            GetFloorBoundsLimits(editableObject, out var minX, out var maxX, out var minZ, out var maxZ);
 
             if (minX > maxX)
             {
@@ -459,6 +536,53 @@ namespace BookshelfPorting.Runtime
             }
 
             return worldPosition;
+        }
+
+        private bool IsWithinFloorBounds(Vector3 worldPosition, RoomEditableObject editableObject)
+        {
+            if (!hasRoomFloorBounds)
+            {
+                return true;
+            }
+
+            GetFloorBoundsLimits(editableObject, out var minX, out var maxX, out var minZ, out var maxZ);
+            return worldPosition.x >= minX &&
+                   worldPosition.x <= maxX &&
+                   worldPosition.z >= minZ &&
+                   worldPosition.z <= maxZ;
+        }
+
+        private void GetFloorBoundsLimits(RoomEditableObject editableObject, out float minX, out float maxX, out float minZ, out float maxZ)
+        {
+            var paddingX = minimumPlacementPadding;
+            var paddingZ = minimumPlacementPadding;
+
+            if (editableObject != null && editableObject.InteractionCollider != null)
+            {
+                var extents = editableObject.InteractionCollider.bounds.extents;
+                paddingX = Mathf.Max(paddingX, extents.x);
+                paddingZ = Mathf.Max(paddingZ, extents.z);
+            }
+
+            minX = roomFloorBounds.min.x + paddingX;
+            maxX = roomFloorBounds.max.x - paddingX;
+            minZ = roomFloorBounds.min.z + paddingZ;
+            maxZ = roomFloorBounds.max.z - paddingZ;
+        }
+
+        private bool IsWorldPositionVisible(Vector3 worldPosition)
+        {
+            if (sceneCamera == null)
+            {
+                return false;
+            }
+
+            var viewportPosition = sceneCamera.WorldToViewportPoint(worldPosition);
+            return viewportPosition.z > 0f &&
+                   viewportPosition.x >= 0.04f &&
+                   viewportPosition.x <= 0.96f &&
+                   viewportPosition.y >= 0.04f &&
+                   viewportPosition.y <= 0.96f;
         }
 
         private RoomEditableObject RaycastEditableObject(Vector2 screenPosition)

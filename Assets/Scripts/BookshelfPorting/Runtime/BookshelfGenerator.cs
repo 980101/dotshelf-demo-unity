@@ -13,6 +13,7 @@ namespace BookshelfPorting.Runtime
         private const string BookStackAssetPath = "Assets/Arts/Models/Props/book_stack.glb";
         private const string FloorLampAssetPath = "Assets/Arts/Models/Props/lamp_floor.glb";
         private const string NaturalRugAssetPath = "Assets/Arts/Models/Props/rug_natural.glb";
+        private const string TableNaturalAssetPath = "Assets/Arts/Models/Props/table_natural.glb";
         private const string QABooksBaseTexturePath = "Assets/QA_Books/Textures/BooksA_bc.tga";
         private const string QABooksNormalTexturePath = "Assets/QA_Books/Textures/BooksA_n.tga";
         private const string QABooksMetallicTexturePath = "Assets/QA_Books/Textures/BooksA_m_ao_g.tga";
@@ -30,6 +31,7 @@ namespace BookshelfPorting.Runtime
         [SerializeField] private GameObject bookStackModelAsset = null;
         [SerializeField] private GameObject floorLampModelAsset = null;
         [SerializeField] private GameObject naturalRugModelAsset = null;
+        [SerializeField] private GameObject tableNaturalModelAsset = null;
         [SerializeField] private Texture2D qaBooksBaseMap = null;
         [SerializeField] private Texture2D qaBooksNormalMap = null;
         [SerializeField] private Texture2D qaBooksMaskMap = null;
@@ -686,6 +688,20 @@ namespace BookshelfPorting.Runtime
             return naturalRugModelAsset;
         }
 
+        private GameObject ResolveTableNaturalAsset()
+        {
+            if (tableNaturalModelAsset != null)
+            {
+                return tableNaturalModelAsset;
+            }
+
+#if UNITY_EDITOR
+            tableNaturalModelAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(TableNaturalAssetPath);
+#endif
+
+            return tableNaturalModelAsset;
+        }
+
         private RoomEditableObject CreateHamhamDisplay(Transform parent, Vector3 worldPosition, Quaternion worldRotation, bool registerGenerated)
         {
             var hamhamAsset = ResolveHamhamAsset();
@@ -1197,15 +1213,38 @@ namespace BookshelfPorting.Runtime
             desk.transform.localRotation = Quaternion.identity;
             generatedGeometry.Add(desk);
 
-            CreateBox("Desktop", desk.transform, new Vector3(0f, deskHeight, 0f), new Vector3(deskDepth, deskThickness, deskWidth), wood);
-            CreateBox("DeskLegA", desk.transform, new Vector3(-(deskDepth * 0.5f - 0.11f), deskHeight * 0.5f, -(deskWidth * 0.5f - 0.10f)), new Vector3(legThickness, deskHeight, legThickness), wood);
-            CreateBox("DeskLegB", desk.transform, new Vector3(deskDepth * 0.5f - 0.11f, deskHeight * 0.5f, -(deskWidth * 0.5f - 0.10f)), new Vector3(legThickness, deskHeight, legThickness), wood);
-            CreateBox("DeskLegC", desk.transform, new Vector3(-(deskDepth * 0.5f - 0.11f), deskHeight * 0.5f, deskWidth * 0.5f - 0.10f), new Vector3(legThickness, deskHeight, legThickness), wood);
-            CreateBox("DeskLegD", desk.transform, new Vector3(deskDepth * 0.5f - 0.11f, deskHeight * 0.5f, deskWidth * 0.5f - 0.10f), new Vector3(legThickness, deskHeight, legThickness), wood);
+            var deskTopY = deskHeight + deskThickness * 0.5f;
+            var tableAsset = ResolveTableNaturalAsset();
+            if (tableAsset != null)
+            {
+                var deskModelRoot = new GameObject("DeskModel");
+                deskModelRoot.transform.SetParent(desk.transform, false);
+                deskModelRoot.transform.localPosition = Vector3.zero;
+                deskModelRoot.transform.localRotation = Quaternion.identity;
+                deskModelRoot.transform.localScale = Vector3.one;
+
+                var tableInstance = Instantiate(tableAsset, deskModelRoot.transform);
+                tableInstance.name = tableAsset.name;
+                tableInstance.transform.localPosition = Vector3.zero;
+                tableInstance.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                tableInstance.transform.localScale = Vector3.one;
+
+                RemoveChildColliders(tableInstance.transform);
+                ScaleModelToHeight(deskModelRoot.transform, deskTopY);
+                AlignModelToFloor(deskModelRoot.transform, tableInstance.transform);
+            }
+            else
+            {
+                CreateBox("Desktop", desk.transform, new Vector3(0f, deskHeight, 0f), new Vector3(deskDepth, deskThickness, deskWidth), wood);
+                CreateBox("DeskLegA", desk.transform, new Vector3(-(deskDepth * 0.5f - 0.11f), deskHeight * 0.5f, -(deskWidth * 0.5f - 0.10f)), new Vector3(legThickness, deskHeight, legThickness), wood);
+                CreateBox("DeskLegB", desk.transform, new Vector3(deskDepth * 0.5f - 0.11f, deskHeight * 0.5f, -(deskWidth * 0.5f - 0.10f)), new Vector3(legThickness, deskHeight, legThickness), wood);
+                CreateBox("DeskLegC", desk.transform, new Vector3(-(deskDepth * 0.5f - 0.11f), deskHeight * 0.5f, deskWidth * 0.5f - 0.10f), new Vector3(legThickness, deskHeight, legThickness), wood);
+                CreateBox("DeskLegD", desk.transform, new Vector3(deskDepth * 0.5f - 0.11f, deskHeight * 0.5f, deskWidth * 0.5f - 0.10f), new Vector3(legThickness, deskHeight, legThickness), wood);
+            }
 
             var notebook = new GameObject("Notebook");
             notebook.transform.SetParent(desk.transform, false);
-            notebook.transform.localPosition = new Vector3(0.10f, deskHeight + deskThickness * 0.5f + 0.009f, 0f);
+            notebook.transform.localPosition = new Vector3(0f, deskHeight + deskThickness * 0.5f + 0.009f, 0f);
             notebook.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
             generatedGeometry.Add(notebook);
 
